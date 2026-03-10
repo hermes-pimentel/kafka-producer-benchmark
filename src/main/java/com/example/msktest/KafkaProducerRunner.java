@@ -25,7 +25,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class KafkaProducerRunner implements CommandLineRunner {
@@ -49,11 +54,14 @@ public class KafkaProducerRunner implements CommandLineRunner {
     @Value("${app.batch-size}")
     private int batchSize;
 
+    @Value("${app.threads}")
+    private int threads;
+
     public KafkaProducerRunner(KafkaTemplate<String, String> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    record SendRecord(int seq, long latencyMs, int partition, long offset, long timestamp) {}
+    record SendRecord(int threadId, int seq, long latencyMs, int partition, long offset, long timestamp) {}
 
     @Override
     public void run(String... args) throws Exception {
@@ -61,18 +69,51 @@ public class KafkaProducerRunner implements CommandLineRunner {
 
         boolean timeMode = messageCount <= 0;
         String mode = timeMode ? durationMinutes + " min" : messageCount + " msgs";
-        log.info("Starting producer: mode={}, batchSize={}, topic={}", mode, batchSize, topic);
+        log.info("Starting producer: mode={}, batchSize={}, threads={}, topic={}", mode, batchSize, threads, topic);
 
-        List<SendRecord> records = new ArrayList<>();
+        List<SendRecord> allRecords = new CopyOnWriteArrayList<>();
         long totalStart = System.currentTimeMillis();
         long deadline = timeMode ? totalStart + (long) durationMinutes * 60_000 : Long.MAX_VALUE;
+
+        // Per-thread message count: each thread sends messageCount/threads messages
+        int perThreadCount = messageCount > 0 ? messageCount / threads : 0;
+        int remainder = messageCount > 0 ? messageCount % threads : 0;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch latch = new CountDownLatch(threads);
+        AtomicInteger totalSent = new AtomicInteger();
+
+        for (int t = 0; t < threads; t++) {
+            final int threadId = t;
+            final int threadMsgCount = perThreadCount + (t < remainder ? 1 : 0);
+            executor.submit(() -> {
+                try {
+                    int sent = produceMessages(threadId, threadMsgCount, deadline, timeMode, allRecords);
+                    totalSent.addAndGet(sent);
+                } catch (Exception e) {
+                    log.error("Thread {} failed: {}", threadId, e.getMessage(), e);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await();
+        executor.shutdown();
+
+        long totalMs = System.currentTimeMillis() - totalStart;
+        printStats(allRecords, totalMs, totalSent.get());
+        exportCsv(allRecords);
+    }
+
+    private int produceMessages(int threadId, int threadMsgCount, long deadline, boolean timeMode, List<SendRecord> records) throws Exception {
         int seq = 0;
 
-        while (shouldContinue(seq, deadline, timeMode)) {
-            int end = timeMode ? seq + batchSize : Math.min(seq + batchSize, messageCount);
+        while (shouldContinue(seq, threadMsgCount, deadline, timeMode)) {
+            int end = timeMode ? seq + batchSize : Math.min(seq + batchSize, threadMsgCount);
 
             if (batchSize == 1) {
-                String json = buildMessage(seq);
+                String json = buildMessage(threadId, seq);
                 Message<String> message = MessageBuilder.withPayload(json)
                         .setHeader(KafkaHeaders.TOPIC, topic)
                         .setHeader(KafkaHeaders.KEY, "key-" + (seq % 10))
@@ -82,9 +123,9 @@ public class KafkaProducerRunner implements CommandLineRunner {
                 RecordMetadata metadata = kafkaTemplate.send(message).get().getRecordMetadata();
                 long latencyMs = (System.nanoTime() - sendStart) / 1_000_000;
 
-                records.add(new SendRecord(seq, latencyMs, metadata.partition(), metadata.offset(), metadata.timestamp()));
+                records.add(new SendRecord(threadId, seq, latencyMs, metadata.partition(), metadata.offset(), metadata.timestamp()));
                 if (seq % 100 == 0) {
-                    log.info("msg={} partition={} offset={} latency={}ms", seq, metadata.partition(), metadata.offset(), latencyMs);
+                    log.info("[thread-{}] msg={} partition={} offset={} latency={}ms", threadId, seq, metadata.partition(), metadata.offset(), latencyMs);
                 }
                 seq++;
             } else {
@@ -92,7 +133,7 @@ public class KafkaProducerRunner implements CommandLineRunner {
                 long batchStart = System.nanoTime();
 
                 for (int j = seq; j < end; j++) {
-                    String json = buildMessage(j);
+                    String json = buildMessage(threadId, j);
                     Message<String> message = MessageBuilder.withPayload(json)
                             .setHeader(KafkaHeaders.TOPIC, topic)
                             .setHeader(KafkaHeaders.KEY, "key-" + (j % 10))
@@ -103,21 +144,19 @@ public class KafkaProducerRunner implements CommandLineRunner {
                 for (int j = 0; j < futures.size(); j++) {
                     RecordMetadata metadata = futures.get(j).get().getRecordMetadata();
                     long latencyMs = (System.nanoTime() - batchStart) / 1_000_000;
-                    records.add(new SendRecord(seq + j, latencyMs, metadata.partition(), metadata.offset(), metadata.timestamp()));
+                    records.add(new SendRecord(threadId, seq + j, latencyMs, metadata.partition(), metadata.offset(), metadata.timestamp()));
                 }
-                log.info("batch [{}-{}] latency={}ms", seq, seq + futures.size() - 1, (System.nanoTime() - batchStart) / 1_000_000);
+                log.info("[thread-{}] batch [{}-{}] latency={}ms", threadId, seq, seq + futures.size() - 1, (System.nanoTime() - batchStart) / 1_000_000);
                 seq += futures.size();
             }
         }
-
-        long totalMs = System.currentTimeMillis() - totalStart;
-        printStats(records, totalMs, seq);
-        exportCsv(records);
+        log.info("[thread-{}] finished, sent {} messages", threadId, seq);
+        return seq;
     }
 
-    private boolean shouldContinue(int seq, long deadline, boolean timeMode) {
+    private boolean shouldContinue(int seq, int threadMsgCount, long deadline, boolean timeMode) {
         if (timeMode) return System.currentTimeMillis() < deadline;
-        return seq < messageCount;
+        return seq < threadMsgCount;
     }
 
     private void ensureTopicExists() {
@@ -148,8 +187,9 @@ public class KafkaProducerRunner implements CommandLineRunner {
         }
     }
 
-    private String buildMessage(int seq) throws Exception {
+    private String buildMessage(int threadId, int seq) throws Exception {
         ObjectNode node = mapper.createObjectNode();
+        node.put("thread", threadId);
         node.put("seq", seq);
         node.put("ts", Instant.now().toString());
         node.put("id", UUID.randomUUID().toString());
@@ -176,6 +216,7 @@ public class KafkaProducerRunner implements CommandLineRunner {
 
         log.info("=== RESULTS ===");
         log.info("Total messages: {}", totalSent);
+        log.info("Threads: {}", threads);
         log.info("Batch size: {}", batchSize);
         log.info("Total time: {}ms", totalMs);
         log.info("Throughput: {} msg/s", String.format("%.1f", (double) totalSent / totalMs * 1000));
@@ -186,9 +227,9 @@ public class KafkaProducerRunner implements CommandLineRunner {
     private void exportCsv(List<SendRecord> records) throws Exception {
         String filename = "latency-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".csv";
         try (PrintWriter pw = new PrintWriter(new FileWriter(filename))) {
-            pw.println("seq,latency_ms,partition,offset,timestamp");
+            pw.println("thread,seq,latency_ms,partition,offset,timestamp");
             for (SendRecord r : records) {
-                pw.printf("%d,%d,%d,%d,%d%n", r.seq, r.latencyMs, r.partition, r.offset, r.timestamp);
+                pw.printf("%d,%d,%d,%d,%d,%d%n", r.threadId, r.seq, r.latencyMs, r.partition, r.offset, r.timestamp);
             }
         }
         log.info("CSV exported: {}", filename);

@@ -37,6 +37,7 @@ All parameters can be passed via `--spring-boot.run.arguments="--param=value"`.
 | `app.message-count` | 0 | Number of messages to send (0 = use duration instead) |
 | `app.message-size-bytes` | 512 | Approximate JSON payload size in bytes |
 | `app.batch-size` | 1 | 1 = synchronous send per message, >1 = async batch send |
+| `app.threads` | 1 | Number of concurrent producer threads |
 
 ### Kafka Producer Properties
 
@@ -174,6 +175,24 @@ Run for a fixed duration to observe broker behavior under sustained load. Useful
 # 30 minutes of sustained traffic with batching
 ./mvnw spring-boot:run \
   -Dspring-boot.run.arguments="--app.duration-minutes=30 --app.batch-size=10 --spring.kafka.producer.properties.linger.ms=50"
+```
+
+### Concurrent producers
+
+Use `app.threads` to run multiple producer threads in parallel. Each thread sends its share of messages independently (message-count is split evenly across threads). All threads share the same KafkaTemplate and results are aggregated into a single report and CSV.
+
+```bash
+# 10 threads, 1000 messages each (10000 total)
+./mvnw spring-boot:run \
+  -Dspring-boot.run.arguments="--app.message-count=10000 --app.threads=10"
+
+# 20 threads with batching for maximum load
+./mvnw spring-boot:run \
+  -Dspring-boot.run.arguments="--app.message-count=20000 --app.threads=20 --app.batch-size=10 --spring.kafka.producer.properties.linger.ms=50"
+
+# 10 threads for 30 minutes (duration mode, all threads run for the full duration)
+./mvnw spring-boot:run \
+  -Dspring-boot.run.arguments="--app.duration-minutes=30 --app.threads=10 --app.batch-size=10"
 ```
 
 ### Full MSK example with IAM
