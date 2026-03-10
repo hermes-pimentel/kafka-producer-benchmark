@@ -1,0 +1,27 @@
+# Build
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Maven wrapper jar
+.mvn/wrapper/maven-wrapper.jar
+
+# Kiro
+.kiro/
+
+# Output
+*.csv
+*.log
