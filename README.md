@@ -179,7 +179,7 @@ Run for a fixed duration to observe broker behavior under sustained load. Useful
 
 ### Concurrent producers
 
-Use `app.threads` to run multiple producer threads in parallel. Each thread sends its share of messages independently (message-count is split evenly across threads). All threads share the same KafkaTemplate and results are aggregated into a single report and CSV.
+Use `app.threads` to run multiple producer threads in parallel. Each thread sends the full `message-count` independently. All threads share the same KafkaTemplate and results are aggregated into a single report and CSV.
 
 ```bash
 # 10 threads, 1000 messages each (10000 total)
@@ -212,9 +212,8 @@ If the topic doesn't exist, it is created with:
 ## Output
 
 Each run produces:
-- Per-message log with partition, offset, and latency (every 100 messages in sync mode, per batch in batch mode)
 - Summary statistics: avg, min, max, p50, p95, p99 latency and throughput (msg/s)
-- CSV file: `latency-YYYYMMDD-HHmmss.csv` with columns: seq, latency_ms, partition, offset, timestamp
+- CSV file: `latency-YYYYMMDD-HHmmss.csv` with columns: thread, seq, latency_ms, partition, offset, timestamp
 
 ## CloudWatch Dashboards
 
