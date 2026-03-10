@@ -98,6 +98,7 @@ public class KafkaProducerRunner implements CommandLineRunner {
     private List<SendRecord> produceMessages(int threadId, int threadMsgCount, long deadline, boolean timeMode) throws Exception {
         List<SendRecord> records = new ArrayList<>();
         int seq = 0;
+        log.info("[thread-{}] started (threadMsgCount={}, timeMode={})", threadId, threadMsgCount, timeMode);
 
         while (shouldContinue(seq, threadMsgCount, deadline, timeMode)) {
             int end = timeMode ? seq + batchSize : Math.min(seq + batchSize, threadMsgCount);
@@ -195,6 +196,22 @@ public class KafkaProducerRunner implements CommandLineRunner {
     private void printStats(List<SendRecord> records, long totalMs, int totalSent) {
         if (records.isEmpty()) return;
 
+        // Per-thread stats
+        Map<Integer, List<Long>> byThread = new java.util.TreeMap<>();
+        for (SendRecord r : records) {
+            byThread.computeIfAbsent(r.threadId, k -> new ArrayList<>()).add(r.latencyMs);
+        }
+        for (var entry : byThread.entrySet()) {
+            List<Long> sorted = entry.getValue().stream().sorted().toList();
+            long sum = sorted.stream().mapToLong(Long::longValue).sum();
+            log.info("[thread-{}] sent={} avg={}ms p50={}ms p99={}ms",
+                    entry.getKey(), sorted.size(),
+                    String.format("%.1f", (double) sum / sorted.size()),
+                    sorted.get(sorted.size() / 2),
+                    sorted.get((int) (sorted.size() * 0.99)));
+        }
+
+        // Aggregate stats
         List<Long> sorted = records.stream().map(SendRecord::latencyMs).sorted().toList();
         long sum = sorted.stream().mapToLong(Long::longValue).sum();
         double avg = (double) sum / sorted.size();
@@ -205,7 +222,7 @@ public class KafkaProducerRunner implements CommandLineRunner {
         long max = sorted.get(sorted.size() - 1);
 
         log.info("=== RESULTS ===");
-        log.info("Total messages: {}", totalSent);
+        log.info("Total messages: {} (across {} threads)", totalSent, byThread.size());
         log.info("Threads: {}", threads);
         log.info("Batch size: {}", batchSize);
         log.info("Total time: {}ms", totalMs);
