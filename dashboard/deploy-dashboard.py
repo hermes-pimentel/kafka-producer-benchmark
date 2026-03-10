@@ -76,26 +76,26 @@ def build_dashboard(cluster_type, clusters, max_brokers):
     w = lambda title, metric: widget(title, metric, max_brokers)
 
     widgets = [
-        text("## ⏱️ Produce Latency"),
+        text("## Produce Latency"),
         w("ProduceTotalTimeMsMean", "ProduceTotalTimeMsMean"),
         w("ProduceResponseSendTimeMsMean", "ProduceResponseSendTimeMsMean"),
     ]
 
     if is_std:
         widgets += [
-            text("## 🔬 Produce Latency Breakdown (queue → local/replication → response)"),
+            text("## Produce Latency Breakdown (queue > local/replication > response)"),
             w("ProduceRequestQueueTimeMsMean", "ProduceRequestQueueTimeMsMean"),
             w("ProduceLocalTimeMsMean (includes replication wait for ack=all)", "ProduceLocalTimeMsMean"),
             w("ProduceResponseQueueTimeMsMean", "ProduceResponseQueueTimeMsMean"),
         ]
 
     widgets += [
-        text("## 📊 Throughput"),
+        text("## Throughput"),
         w("BytesInPerSec", "BytesInPerSec"),
         w("BytesOutPerSec", "BytesOutPerSec"),
         w("MessagesInPerSec", "MessagesInPerSec"),
         w("RequestBytesMean", "RequestBytesMean"),
-        text("## 🔄 Replication"),
+        text("## Replication"),
         w("ReplicationBytesInPerSec", "ReplicationBytesInPerSec"),
         w("ReplicationBytesOutPerSec", "ReplicationBytesOutPerSec"),
     ]
@@ -107,7 +107,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
         ]
 
     widgets += [
-        text("## 🚦 Throttling"),
+        text("## Throttling"),
         w("ProduceThrottleTime", "ProduceThrottleTime"),
         w("RequestHandlerAvgIdlePercent", "RequestHandlerAvgIdlePercent"),
     ]
@@ -118,7 +118,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
             w("ProduceThrottleQueueSize", "ProduceThrottleQueueSize"),
         ]
 
-    widgets += [text("## 🖥️ Broker Health")]
+    widgets += [text("## Broker Health")]
 
     if is_std:
         widgets += [
@@ -132,7 +132,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
         widgets += [
             w("CpuIdle", "CpuIdle"),
             w("MemoryUsed", "MemoryUsed"),
-            text("## 🌐 Network"),
+            text("## Network"),
             w("TrafficBytes", "TrafficBytes"),
             w("TcpConnections", "TcpConnections"),
         ]

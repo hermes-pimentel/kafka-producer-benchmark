@@ -109,7 +109,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
     lw = lambda title, metric: lag_widget(title, metric)
 
     widgets = [
-        text("## 📉 Consumer Lag (type consumer group and topic above)"),
+        text("## Consumer Lag (type consumer group and topic above)"),
         lw("MaxOffsetLag", "MaxOffsetLag"),
         lw("SumOffsetLag", "SumOffsetLag"),
         lw("EstimatedMaxTimeLag (seconds)", "EstimatedMaxTimeLag"),
@@ -118,14 +118,14 @@ def build_dashboard(cluster_type, clusters, max_brokers):
 
     # Fetch consumer latency (PER_BROKER)
     widgets += [
-        text("## ⏱️ Fetch Consumer Latency"),
+        text("## Fetch Consumer Latency"),
         bw("FetchConsumerTotalTimeMsMean", "FetchConsumerTotalTimeMsMean"),
         bw("FetchConsumerResponseSendTimeMsMean", "FetchConsumerResponseSendTimeMsMean"),
     ]
 
     if is_std:
         widgets += [
-            text("## 🔬 Fetch Consumer Latency Breakdown (queue → local → response)"),
+            text("## Fetch Consumer Latency Breakdown (queue > local > response)"),
             bw("FetchConsumerRequestQueueTimeMsMean", "FetchConsumerRequestQueueTimeMsMean"),
             bw("FetchConsumerLocalTimeMsMean", "FetchConsumerLocalTimeMsMean"),
             bw("FetchConsumerResponseQueueTimeMsMean", "FetchConsumerResponseQueueTimeMsMean"),
@@ -140,7 +140,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
     # Follower fetch (PER_BROKER, Standard only)
     if is_std:
         widgets += [
-            text("## 🔄 Fetch Follower Latency"),
+            text("## Fetch Follower Latency"),
             bw("FetchFollowerTotalTimeMsMean", "FetchFollowerTotalTimeMsMean"),
             bw("FetchFollowerLocalTimeMsMean", "FetchFollowerLocalTimeMsMean"),
             bw("FetchFollowerRequestQueueTimeMsMean", "FetchFollowerRequestQueueTimeMsMean"),
@@ -150,13 +150,13 @@ def build_dashboard(cluster_type, clusters, max_brokers):
 
     # Throughput
     widgets += [
-        text("## 📊 Consumer Throughput"),
+        text("## Consumer Throughput"),
         bw("BytesOutPerSec", "BytesOutPerSec"),
     ]
 
     # Fetch throttling (PER_BROKER)
     widgets += [
-        text("## 🚦 Fetch Throttling"),
+        text("## Fetch Throttling"),
         bw("FetchThrottleTime", "FetchThrottleTime"),
         bw("FetchThrottleByteRate", "FetchThrottleByteRate"),
         bw("FetchThrottleQueueSize", "FetchThrottleQueueSize"),

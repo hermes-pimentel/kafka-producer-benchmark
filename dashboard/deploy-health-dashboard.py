@@ -93,7 +93,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
     cw = lambda title, metric, **kw: cluster_widget(title, metric, **kw)
 
     # CPU
-    widgets = [text("## 🖥️ CPU")]
+    widgets = [text("## CPU")]
     if is_std:
         widgets += [
             bw("CpuIdle (%)", "CpuIdle"),
@@ -114,7 +114,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
         ]
 
     # Memory
-    widgets += [text("## 🧠 Memory")]
+    widgets += [text("## Memory")]
     widgets += [
         bw("MemoryUsed (bytes)", "MemoryUsed"),
         bw("MemoryFree (bytes)", "MemoryFree"),
@@ -128,7 +128,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
         ]
 
     # Disk / Storage
-    widgets += [text("## 💾 Disk & Storage")]
+    widgets += [text("## Disk & Storage")]
     if is_std:
         widgets += [
             bw("KafkaDataLogsDiskUsed (%)", "KafkaDataLogsDiskUsed"),
@@ -147,7 +147,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
         ]
 
     # Network
-    widgets += [text("## 🌐 Network")]
+    widgets += [text("## Network")]
     widgets += [
         bw("BytesInPerSec", "BytesInPerSec"),
         bw("BytesOutPerSec", "BytesOutPerSec"),
@@ -175,7 +175,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
     ]
 
     # Partitions & Leaders
-    widgets += [text("## 📦 Partitions & Leaders")]
+    widgets += [text("## Partitions & Leaders")]
     widgets += [
         cw("GlobalPartitionCount", "GlobalPartitionCount"),
         cw("GlobalTopicCount", "GlobalTopicCount"),
@@ -190,14 +190,14 @@ def build_dashboard(cluster_type, clusters, max_brokers):
         ]
 
     # Replication
-    widgets += [text("## 🔄 Replication")]
+    widgets += [text("## Replication")]
     widgets += [
         bw("ReplicationBytesInPerSec", "ReplicationBytesInPerSec"),
         bw("ReplicationBytesOutPerSec", "ReplicationBytesOutPerSec"),
     ]
 
     # Throttling & Request Handler
-    widgets += [text("## 🚦 Throttling & Request Processing")]
+    widgets += [text("## Throttling & Request Processing")]
     widgets += [
         bw("RequestHandlerAvgIdlePercent", "RequestHandlerAvgIdlePercent"),
     ]
@@ -218,7 +218,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
     # Traffic shaping (Standard) / IAM (Express)
     if is_std:
         widgets += [
-            text("## ⚠️ Traffic Shaping"),
+            text("## Traffic Shaping"),
             bw("TrafficShaping", "TrafficShaping"),
             bw("BwInAllowanceExceeded", "BwInAllowanceExceeded"),
             bw("BwOutAllowanceExceeded", "BwOutAllowanceExceeded"),
@@ -227,7 +227,7 @@ def build_dashboard(cluster_type, clusters, max_brokers):
 
     # IAM
     widgets += [
-        text("## 🔐 IAM"),
+        text("## IAM"),
         bw("IAMNumberOfConnectionRequests", "IAMNumberOfConnectionRequests"),
         bw("IAMTooManyConnections", "IAMTooManyConnections"),
     ]
