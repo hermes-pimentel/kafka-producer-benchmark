@@ -25,12 +25,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class KafkaProducerRunner implements CommandLineRunner {
@@ -71,42 +68,37 @@ public class KafkaProducerRunner implements CommandLineRunner {
         String mode = timeMode ? durationMinutes + " min" : messageCount + " msgs";
         log.info("Starting producer: mode={}, batchSize={}, threads={}, topic={}", mode, batchSize, threads, topic);
 
-        List<SendRecord> allRecords = new CopyOnWriteArrayList<>();
+        List<SendRecord> allRecords = new ArrayList<>();
         long totalStart = System.currentTimeMillis();
         long deadline = timeMode ? totalStart + (long) durationMinutes * 60_000 : Long.MAX_VALUE;
 
-        // Per-thread message count: each thread sends messageCount/threads messages
         int perThreadCount = messageCount > 0 ? messageCount / threads : 0;
         int remainder = messageCount > 0 ? messageCount % threads : 0;
 
         ExecutorService executor = Executors.newFixedThreadPool(threads);
-        CountDownLatch latch = new CountDownLatch(threads);
-        AtomicInteger totalSent = new AtomicInteger();
+        List<java.util.concurrent.Future<List<SendRecord>>> futures = new ArrayList<>();
 
         for (int t = 0; t < threads; t++) {
             final int threadId = t;
             final int threadMsgCount = perThreadCount + (t < remainder ? 1 : 0);
-            executor.submit(() -> {
-                try {
-                    int sent = produceMessages(threadId, threadMsgCount, deadline, timeMode, allRecords);
-                    totalSent.addAndGet(sent);
-                } catch (Exception e) {
-                    log.error("Thread {} failed: {}", threadId, e.getMessage(), e);
-                } finally {
-                    latch.countDown();
-                }
-            });
+            futures.add(executor.submit(() -> produceMessages(threadId, threadMsgCount, deadline, timeMode)));
         }
 
-        latch.await();
+        int totalSent = 0;
+        for (var f : futures) {
+            List<SendRecord> threadRecords = f.get();
+            totalSent += threadRecords.size();
+            allRecords.addAll(threadRecords);
+        }
         executor.shutdown();
 
         long totalMs = System.currentTimeMillis() - totalStart;
-        printStats(allRecords, totalMs, totalSent.get());
+        printStats(allRecords, totalMs, totalSent);
         exportCsv(allRecords);
     }
 
-    private int produceMessages(int threadId, int threadMsgCount, long deadline, boolean timeMode, List<SendRecord> records) throws Exception {
+    private List<SendRecord> produceMessages(int threadId, int threadMsgCount, long deadline, boolean timeMode) throws Exception {
+        List<SendRecord> records = new ArrayList<>();
         int seq = 0;
 
         while (shouldContinue(seq, threadMsgCount, deadline, timeMode)) {
@@ -151,7 +143,7 @@ public class KafkaProducerRunner implements CommandLineRunner {
             }
         }
         log.info("[thread-{}] finished, sent {} messages", threadId, seq);
-        return seq;
+        return records;
     }
 
     private boolean shouldContinue(int seq, int threadMsgCount, long deadline, boolean timeMode) {
