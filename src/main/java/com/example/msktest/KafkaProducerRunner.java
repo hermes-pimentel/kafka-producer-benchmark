@@ -66,11 +66,11 @@ public class KafkaProducerRunner implements CommandLineRunner {
 
         boolean timeMode = messageCount <= 0;
         String mode = timeMode ? durationMinutes + " min" : messageCount + " msgs";
-        log.info("Starting producer: mode={}, batchSize={}, threads={}, topic={}", mode, batchSize, threads, topic);
+        log.info("Starting producer: mode={}, messageSize={}B, batchSize={}, threads={}, topic={}", mode, messageSizeBytes, batchSize, threads, topic);
 
         List<SendRecord> allRecords = new ArrayList<>();
         long totalStart = System.currentTimeMillis();
-        long deadline = timeMode ? totalStart + (long) durationMinutes * 60_000 : Long.MAX_VALUE;
+        long deadline = durationMinutes > 0 ? totalStart + (long) durationMinutes * 60_000 : Long.MAX_VALUE;
 
         int perThreadCount = messageCount > 0 ? messageCount : 0;
 
@@ -98,7 +98,7 @@ public class KafkaProducerRunner implements CommandLineRunner {
     private List<SendRecord> produceMessages(int threadId, int threadMsgCount, long deadline, boolean timeMode) throws Exception {
         List<SendRecord> records = new ArrayList<>();
         int seq = 0;
-        log.info("[thread-{}] started (threadMsgCount={}, timeMode={})", threadId, threadMsgCount, timeMode);
+        log.info("[thread-{}] started", threadId);
 
         while (shouldContinue(seq, threadMsgCount, deadline, timeMode)) {
             int end = timeMode ? seq + batchSize : Math.min(seq + batchSize, threadMsgCount);
@@ -115,9 +115,6 @@ public class KafkaProducerRunner implements CommandLineRunner {
                 long latencyMs = (System.nanoTime() - sendStart) / 1_000_000;
 
                 records.add(new SendRecord(threadId, seq, latencyMs, metadata.partition(), metadata.offset(), metadata.timestamp()));
-                if (seq % 100 == 0) {
-                    log.info("[thread-{}] msg={} partition={} offset={} latency={}ms", threadId, seq, metadata.partition(), metadata.offset(), latencyMs);
-                }
                 seq++;
             } else {
                 List<Future<org.springframework.kafka.support.SendResult<String, String>>> futures = new ArrayList<>();
@@ -137,7 +134,6 @@ public class KafkaProducerRunner implements CommandLineRunner {
                     long latencyMs = (System.nanoTime() - batchStart) / 1_000_000;
                     records.add(new SendRecord(threadId, seq + j, latencyMs, metadata.partition(), metadata.offset(), metadata.timestamp()));
                 }
-                log.info("[thread-{}] batch [{}-{}] latency={}ms", threadId, seq, seq + futures.size() - 1, (System.nanoTime() - batchStart) / 1_000_000);
                 seq += futures.size();
             }
         }
@@ -146,7 +142,8 @@ public class KafkaProducerRunner implements CommandLineRunner {
     }
 
     private boolean shouldContinue(int seq, int threadMsgCount, long deadline, boolean timeMode) {
-        if (timeMode) return System.currentTimeMillis() < deadline;
+        if (System.currentTimeMillis() >= deadline) return false;
+        if (timeMode) return true;
         return seq < threadMsgCount;
     }
 
