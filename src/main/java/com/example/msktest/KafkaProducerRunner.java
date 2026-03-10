@@ -72,16 +72,14 @@ public class KafkaProducerRunner implements CommandLineRunner {
         long totalStart = System.currentTimeMillis();
         long deadline = timeMode ? totalStart + (long) durationMinutes * 60_000 : Long.MAX_VALUE;
 
-        int perThreadCount = messageCount > 0 ? messageCount / threads : 0;
-        int remainder = messageCount > 0 ? messageCount % threads : 0;
+        int perThreadCount = messageCount > 0 ? messageCount : 0;
 
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         List<java.util.concurrent.Future<List<SendRecord>>> futures = new ArrayList<>();
 
         for (int t = 0; t < threads; t++) {
             final int threadId = t;
-            final int threadMsgCount = perThreadCount + (t < remainder ? 1 : 0);
-            futures.add(executor.submit(() -> produceMessages(threadId, threadMsgCount, deadline, timeMode)));
+            futures.add(executor.submit(() -> produceMessages(threadId, perThreadCount, deadline, timeMode)));
         }
 
         int totalSent = 0;
